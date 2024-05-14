@@ -6,6 +6,7 @@ The Project structure shown as below:
 
 The main contributions of BountyGuardian protocol are shown as: 
 1. Merkle tree-based on-chain reputation system which authenticates the reputation of users at the same time facilitates an early-staged credit based blockchain ecosystem. 
+![Reputation Flow](https://github.com/mattchutwo/zk-mando/blob/main/Reputation%20Flow.png)
 
 2. Smart contract-driven incentive mechanism which encourages timely and fair responses from vendors to reported vulnerabilities, using Bug Bounty tokens. 
 
