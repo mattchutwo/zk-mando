@@ -1,0 +1,92 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "./BugBountyToken.sol";
+import "./VerifierContract.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+
+contract ExploitManager {
+    BugBountyToken public token;
+    VerifierContract public verifier;
+    mapping(bytes32 => Exploit) public exploits;
+    mapping(address => uint256) public reputation;
+
+    struct Exploit {
+        address submitter;
+        uint256 submissionTime;
+        bool isResolved;
+        bytes32 exploitHash;
+        uint256 deposit;
+    }
+
+    bytes32 public merkleRoot;
+    event ExploitSubmitted(address indexed submitter, bytes32 indexed exploitID);
+    event ExploitVerified(address indexed submitter, bytes32 indexed exploitID, bool isLegitimate);
+    event DepositHeld(bytes32 indexed exploitID, uint256 amount);
+    event ExploitResolved(bytes32 indexed exploitID);
+    event DepositReturned(bytes32 indexed exploitID, uint256 amount);
+
+    constructor(address tokenAddress, address verifierAddress) {
+        token = BugBountyToken(tokenAddress);
+        verifier = VerifierContract(verifierAddress);
+    }
+
+    function submitExploit(bytes memory exploitData, bytes calldata proof, bytes32[] calldata merkleProof) public {
+        bytes32 exploitID = generateExploitID(exploitData, msg.sender);
+
+        require(!exploits[exploitID].isVerified, "Exploit already submitted");
+
+        bool isLegitimate = verifier.verifyProof(proof);
+        require(isLegitimate, "Invalid proof or exploit not legitimate");
+
+        // Verify the merkle proof
+        require(MerkleProof.verify(merkleProof, merkleRoot, keccak256(abi.encodePacked(msg.sender, block.timestamp, exploitData))), "Invalid Merkle proof");
+
+        exploits[exploitID] = Exploit({
+            submitter: msg.sender,
+            submissionTime: block.timestamp,
+            isResolved: false,
+            exploitHash: keccak256(abi.encodePacked(msg.sender, block.timestamp, exploitData)),
+            // need to Hash (Wallet Address | submission/reveal time | random number we pick)
+            deposit: 50 ether
+        });
+
+        token.transfer(msg.sender, 30 ether);
+        token.transferFrom(msg.sender, address(this), exploits[exploitID].deposit);
+
+        emit ExploitSubmitted(msg.sender, exploitID);
+        emit ExploitVerified(msg.sender, exploitID, true);
+        emit DepositHeld(exploitID, exploits[exploitID].deposit);
+    }
+
+    function resolveExploit(bytes32 exploitID, bool fixed) public {
+        require(exploits[exploitID].isVerified && !exploits[exploitID].isResolved, "Exploit not verified or already resolved");
+
+        exploits[exploitID].isResolved = true;
+
+        if (fixed) {
+            token.transfer(exploits[exploitID].submitter, exploits[exploitID].deposit);
+        } else {
+            uint256 reward = exploits[exploitID].deposit * 3 / 4;
+            uint256 fee = exploits[exploitID].deposit - reward;
+            token.transfer(exploits[exploitID].submitter, reward);
+            token.transfer(msg.sender, fee); // assuming the verifier is the caller
+        }
+
+        emit ExploitResolved(exploitID);
+        emit DepositReturned(exploitID, exploits[exploitID].deposit);
+
+        // Update reputation
+        reputation[exploits[exploitID].submitter]++;
+    }
+
+    function generateExploitID(bytes memory exploitData, address submitter) private view returns (bytes32) {
+        return keccak256(abi.encodePacked(block.timestamp, exploitData, submitter));
+           // need to Hash (Wallet Address | submission/reveal time | random number we pick)
+    }
+
+    function updateMerkleRoot(bytes32 newRoot) public {
+        // This function should be protected and only callable by authorized entities
+        merkleRoot = newRoot;
+    }
+}
