@@ -1,0 +1,6 @@
+[submodule "mozz/swanky"]
+	path = mozz/swanky
+	url = git@github.com:GaloisInc/swanky.git
+[submodule "mozz/cheesecloth"]
+	path = mozz/cheesecloth
+	url = git@github.com:mattchutwo/cheesecloth.git
